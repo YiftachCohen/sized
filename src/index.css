@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-white text-charcoal antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply px-6 py-3 bg-charcoal text-white text-sm font-normal tracking-wide border border-charcoal transition-all duration-200 hover:bg-transparent hover:text-charcoal;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2 bg-transparent text-charcoal text-sm font-light tracking-wide border border-slate-200 transition-all duration-200 hover:border-slate-400;
+  }
+
+  .progress-bar {
+    @apply h-1 bg-slate-100 rounded-full overflow-hidden;
+  }
+
+  .progress-bar-fill {
+    @apply h-full bg-charcoal transition-all duration-300 ease-out;
+  }
+}
+
+/* Checkerboard pattern for transparent background preview */
+.checkerboard {
+  background-image:
+    linear-gradient(45deg, #e5e5e5 25%, transparent 25%),
+    linear-gradient(-45deg, #e5e5e5 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #e5e5e5 75%),
+    linear-gradient(-45deg, transparent 75%, #e5e5e5 75%);
+  background-size: 8px 8px;
+  background-position:
+    0 0,
+    0 4px,
+    4px -4px,
+    -4px 0px;
+}
