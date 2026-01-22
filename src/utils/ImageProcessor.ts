@@ -66,7 +66,7 @@ function applySharpen(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
-  intensity: number = 0.3
+  intensity = 0.3
 ): void {
   const imageData = ctx.getImageData(0, 0, width, height);
   const data = imageData.data;
