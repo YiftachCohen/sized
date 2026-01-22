@@ -11,15 +11,11 @@
 
 @layer components {
   .btn-primary {
-    @apply px-6 py-3 bg-charcoal text-white text-sm font-normal tracking-wide
-           border border-charcoal transition-all duration-200
-           hover:bg-transparent hover:text-charcoal;
+    @apply px-6 py-3 bg-charcoal text-white text-sm font-normal tracking-wide border border-charcoal transition-all duration-200 hover:bg-transparent hover:text-charcoal;
   }
 
   .btn-secondary {
-    @apply px-4 py-2 bg-transparent text-charcoal text-sm font-light tracking-wide
-           border border-slate-200 transition-all duration-200
-           hover:border-slate-400;
+    @apply px-4 py-2 bg-transparent text-charcoal text-sm font-light tracking-wide border border-slate-200 transition-all duration-200 hover:border-slate-400;
   }
 
   .progress-bar {
@@ -39,5 +35,9 @@
     linear-gradient(45deg, transparent 75%, #e5e5e5 75%),
     linear-gradient(-45deg, transparent 75%, #e5e5e5 75%);
   background-size: 8px 8px;
-  background-position: 0 0, 0 4px, 4px -4px, -4px 0px;
+  background-position:
+    0 0,
+    0 4px,
+    4px -4px,
+    -4px 0px;
 }

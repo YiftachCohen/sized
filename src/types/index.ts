@@ -12,7 +12,7 @@ export interface ProcessedImage {
   size: ScreenshotSize;
 }
 
-export type FitMode = 'contain' | 'cover';
+export type FitMode = "contain" | "cover";
 
 export interface ProcessingOptions {
   fitMode: FitMode;
