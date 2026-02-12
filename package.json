@@ -1,8 +1,25 @@
 {
   "name": "ios-screenshot-generator",
-  "private": true,
   "version": "1.0.0",
+  "description": "Generate iOS App Store screenshots in all required sizes — entirely in the browser",
   "type": "module",
+  "license": "MIT",
+  "author": "Yiftach Cohen",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YiftachCohen/sized.git"
+  },
+  "homepage": "https://github.com/YiftachCohen/sized",
+  "bugs": {
+    "url": "https://github.com/YiftachCohen/sized/issues"
+  },
+  "keywords": [
+    "ios",
+    "screenshot",
+    "app-store",
+    "image-resize",
+    "canvas"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
