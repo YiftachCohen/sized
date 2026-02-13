@@ -2,6 +2,8 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+![Sized – Generate iOS App Store screenshots in all required sizes](public/og.jpg)
+
 Generate iOS App Store screenshots in all required sizes — entirely in the browser. No uploads, no servers, no external APIs.
 
 **[Live Demo →](https://ycstudios.dev/)**
