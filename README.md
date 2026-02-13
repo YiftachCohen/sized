@@ -6,7 +6,7 @@
 
 Generate iOS App Store screenshots in all required sizes — entirely in the browser. No uploads, no servers, no external APIs.
 
-**[Live Demo →](https://ycstudios.dev/)**
+**[Live Demo →]([https://ycstudios.dev/](https://ycstudios.dev/sized))**
 
 ![Screenshot](docs/screenshot.png)
 
