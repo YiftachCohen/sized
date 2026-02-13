@@ -30,3 +30,6 @@ pnpm-debug.log*
 
 # Conductor context
 .context/
+
+# Claude Code
+CLAUDE.md

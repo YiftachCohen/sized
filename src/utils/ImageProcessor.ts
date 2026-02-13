@@ -7,9 +7,9 @@ import type {
 } from "../types";
 
 export const SCREENSHOT_SIZES: ScreenshotSize[] = [
-  { name: "6.9inch", width: 1320, height: 2868, displayName: '6.9" Display' },
+  { name: "6.9inch", width: 1260, height: 2736, displayName: '6.9" Display' },
   { name: "6.5inch", width: 1284, height: 2778, displayName: '6.5" Display' },
-  { name: "5.5inch", width: 1242, height: 2688, displayName: '5.5" Display' },
+  { name: "5.5inch", width: 1242, height: 2208, displayName: '5.5" Display' },
   {
     name: "12.9inch_ipad",
     width: 2048,

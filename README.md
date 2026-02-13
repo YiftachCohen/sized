@@ -4,6 +4,10 @@
 
 Generate iOS App Store screenshots in all required sizes — entirely in the browser. No uploads, no servers, no external APIs.
 
+**[Live Demo →](https://ycstudios.dev/)**
+
+![Screenshot](docs/screenshot.png)
+
 ## Features
 
 - Drag-and-drop, paste, or file-pick image input
@@ -16,9 +20,9 @@ Generate iOS App Store screenshots in all required sizes — entirely in the bro
 
 | Device        | Resolution  |
 |---------------|-------------|
-| 6.7" iPhone   | 1290 × 2796 |
+| 6.9" iPhone   | 1260 × 2736 |
 | 6.5" iPhone   | 1284 × 2778 |
-| 5.5" iPhone   | 1242 × 2688 |
+| 5.5" iPhone   | 1242 × 2208 |
 | 12.9" iPad    | 2048 × 2732 |
 
 ## Getting Started
@@ -37,7 +41,9 @@ pnpm dev
 | `pnpm dev`     | Start dev server with hot reload     |
 | `pnpm build`   | Type-check and build for production  |
 | `pnpm preview` | Preview the production build locally |
+| `pnpm test`    | Run tests                            |
 | `pnpm lint`    | Run Biome linter                     |
+| `pnpm lint:fix`| Auto-fix lint issues                 |
 
 ## Tech Stack
 
