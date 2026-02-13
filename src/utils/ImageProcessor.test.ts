@@ -26,6 +26,7 @@ function createMockCanvasContext(): Record<string, unknown> {
 }
 
 let mockCtx: Record<string, unknown>;
+const originalCreateElement = document.createElement.bind(document);
 
 beforeEach(() => {
   mockCtx = createMockCanvasContext();
@@ -43,7 +44,7 @@ beforeEach(() => {
         ),
       } as unknown as HTMLCanvasElement;
     }
-    return document.createElement.call(document, tag);
+    return originalCreateElement(tag);
   });
 
   // Mock URL.createObjectURL / revokeObjectURL
@@ -104,7 +105,7 @@ describe("SCREENSHOT_SIZES", () => {
 
   it("includes correct App Store resolutions", () => {
     const resolutions = SCREENSHOT_SIZES.map((s) => [s.width, s.height]);
-    expect(resolutions).toContainEqual([1260, 2736]); // 6.9"
+    expect(resolutions).toContainEqual([1320, 2868]); // 6.9"
     expect(resolutions).toContainEqual([1284, 2778]); // 6.5"
     expect(resolutions).toContainEqual([1242, 2208]); // 5.5"
     expect(resolutions).toContainEqual([2048, 2732]); // 12.9" iPad
