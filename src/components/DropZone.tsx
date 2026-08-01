@@ -59,11 +59,16 @@ export function DropZone({ onFileAccepted, onError }: DropZoneProps) {
         return;
       }
 
-      const fileItem = Array.from(items).find((item) => item.kind === "file");
-      if (!fileItem) {
+      const fileItems = Array.from(items).filter(
+        (item) => item.kind === "file"
+      );
+      if (fileItems.length === 0) {
         return;
       }
-      if (!ALLOWED_TYPES.includes(fileItem.type)) {
+      const fileItem = fileItems.find((item) =>
+        ALLOWED_TYPES.includes(item.type)
+      );
+      if (!fileItem) {
         onError("Please paste a PNG, JPEG, or WebP image");
         return;
       }

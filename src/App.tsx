@@ -20,10 +20,19 @@ function App() {
   const [processedImages, setProcessedImages] = useState<ProcessedImage[]>([]);
   const [fitMode, setFitMode] = useState<FitMode>("contain");
   const [backgroundColor, setBackgroundColor] = useState("#FFFFFF");
+  const [debouncedBackgroundColor, setDebouncedBackgroundColor] =
+    useState(backgroundColor);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedBackgroundColor(backgroundColor);
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [backgroundColor]);
 
   useEffect(() => {
     if (!uploadedFile) {
@@ -38,7 +47,7 @@ function App() {
 
     processImage(
       uploadedFile,
-      { backgroundColor, fitMode },
+      { backgroundColor: debouncedBackgroundColor, fitMode },
       (percent) => {
         if (isCurrentRun) {
           setProgress(percent);
@@ -72,7 +81,7 @@ function App() {
       isCurrentRun = false;
       controller.abort();
     };
-  }, [uploadedFile, fitMode, backgroundColor]);
+  }, [uploadedFile, fitMode, debouncedBackgroundColor]);
 
   useEffect(
     () => () => {

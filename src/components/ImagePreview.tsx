@@ -170,7 +170,7 @@ export function ImagePreview({
                 type="button"
               />
             ))}
-            <label className="relative grid h-9 w-9 cursor-pointer place-items-center overflow-hidden rounded-full border border-slate-200 bg-spectrum text-transparent transition hover:scale-105">
+            <label className="relative grid h-9 w-9 cursor-pointer place-items-center overflow-hidden rounded-full border border-slate-200 bg-spectrum text-transparent transition focus-within:ring-2 focus-within:ring-accent focus-within:ring-offset-2 hover:scale-105">
               <span className="sr-only">Custom background color</span>
               <input
                 aria-label="Custom background color"
@@ -223,7 +223,15 @@ export function ImagePreview({
             <p className="mt-4 font-medium text-sm">Preparing screenshots</p>
             <p className="mt-1 text-slate-500 text-xs">{progress}% complete</p>
           </div>
-        ) : (
+        ) : null}
+
+        {!isProcessing && processedImages.length === 0 && (
+          <div className="flex min-h-64 items-center justify-center rounded-xl border border-slate-200 border-dashed px-6 text-center text-slate-500 text-sm">
+            No outputs yet. Choose another image to try again.
+          </div>
+        )}
+
+        {!isProcessing && processedImages.length > 0 && (
           <div className="space-y-3">
             {processedImages.map((image) => (
               <article
@@ -284,7 +292,9 @@ export function ImagePreview({
             onClick={onDownloadAll}
             type="button"
           >
-            {isDownloading ? "Building ZIP…" : "Download both as ZIP"}
+            {isDownloading
+              ? "Building ZIP…"
+              : `Download all ${processedImages.length} as ZIP`}
           </button>
         )}
       </section>
