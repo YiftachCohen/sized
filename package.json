@@ -38,7 +38,7 @@
     "jszip": "^3.10.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-dropzone": "^19.2.0"
+    "react-dropzone": "19.1.1"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.6",
