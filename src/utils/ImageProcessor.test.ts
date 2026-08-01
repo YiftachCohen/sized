@@ -1,53 +1,50 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  downloadAllAsZip,
   ImageProcessorError,
+  MAX_FILE_SIZE,
+  MAX_IMAGE_PIXELS,
   processImage,
   SCREENSHOT_SIZES,
   validateFile,
 } from "./ImageProcessor";
 
-// --- Canvas mocking ---
-
-function createMockCanvasContext(): Record<string, unknown> {
+function createMockCanvasContext() {
   return {
+    drawImage: vi.fn(),
+    fillRect: vi.fn(),
     fillStyle: "",
     imageSmoothingEnabled: true,
-    imageSmoothingQuality: "high",
-    fillRect: vi.fn(),
-    clearRect: vi.fn(),
-    drawImage: vi.fn(),
-    getImageData: vi.fn((_x: number, _y: number, w: number, h: number) => ({
-      data: new Uint8ClampedArray(4 * w * h),
-      width: w,
-      height: h,
-    })),
-    putImageData: vi.fn(),
+    imageSmoothingQuality: "high" as ImageSmoothingQuality,
   };
 }
 
-let mockCtx: Record<string, unknown>;
+let mockCtx: ReturnType<typeof createMockCanvasContext>;
+let canvases: HTMLCanvasElement[];
 const originalCreateElement = document.createElement.bind(document);
+const OUTPUT_FILENAME_PATTERN = /^sized_[\w_]+_\d+x\d+\.jpg$/;
 
 beforeEach(() => {
+  vi.restoreAllMocks();
   mockCtx = createMockCanvasContext();
+  canvases = [];
 
-  // Mock canvas getContext
   vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
     if (tag === "canvas") {
-      return {
-        width: 0,
-        height: 0,
+      const canvas = {
         getContext: vi.fn(() => mockCtx),
-        toDataURL: vi.fn(
-          () =>
-            "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-        ),
+        height: 0,
+        toBlob: vi.fn((callback: BlobCallback, type?: string) => {
+          callback(new Blob(["jpeg"], { type: type ?? "image/jpeg" }));
+        }),
+        width: 0,
       } as unknown as HTMLCanvasElement;
+      canvases.push(canvas);
+      return canvas;
     }
     return originalCreateElement(tag);
   });
 
-  // Mock URL.createObjectURL / revokeObjectURL
   vi.stubGlobal("URL", {
     ...URL,
     createObjectURL: vi.fn(() => "blob:mock-url"),
@@ -55,285 +52,242 @@ beforeEach(() => {
   });
 });
 
-// Helper to create a mock File
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 function createMockFile(name: string, type: string, sizeBytes = 1024): File {
-  const content = new Uint8Array(sizeBytes);
-  return new File([content], name, { type });
+  return new File([new Uint8Array(sizeBytes)], name, { type });
 }
 
-// Helper to mock Image loading
-function mockImageLoad(width = 800, height = 600) {
+function mockImageLoad(width = 1000, height = 2000) {
   vi.stubGlobal(
     "Image",
     class MockImage {
       width = width;
       height = height;
+      naturalWidth = width;
+      naturalHeight = height;
       src = "";
       onload: (() => void) | null = null;
       onerror: (() => void) | null = null;
 
       constructor() {
-        // Trigger onload asynchronously
         setTimeout(() => this.onload?.(), 0);
       }
     }
   );
 }
 
-// --- Regex patterns (top-level for biome perf lint) ---
+function mockImageError() {
+  vi.stubGlobal(
+    "Image",
+    class MockImage {
+      src = "";
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
 
-const FILENAME_PATTERN = /^screenshot_[\w.]+_\d+x\d+\.png$/;
-const DATA_URL_PATTERN = /^data:image\/png;base64,/;
-
-// --- Tests ---
+      constructor() {
+        setTimeout(() => this.onerror?.(), 0);
+      }
+    }
+  );
+}
 
 describe("SCREENSHOT_SIZES", () => {
-  it("contains exactly 4 device sizes", () => {
-    expect(SCREENSHOT_SIZES).toHaveLength(4);
-  });
-
-  it("each size has required properties", () => {
-    for (const size of SCREENSHOT_SIZES) {
-      expect(size).toHaveProperty("name");
-      expect(size).toHaveProperty("width");
-      expect(size).toHaveProperty("height");
-      expect(size).toHaveProperty("displayName");
-      expect(size.width).toBeGreaterThan(0);
-      expect(size.height).toBeGreaterThan(0);
-    }
-  });
-
-  it("includes correct App Store resolutions", () => {
-    const resolutions = SCREENSHOT_SIZES.map((s) => [s.width, s.height]);
-    expect(resolutions).toContainEqual([1320, 2868]); // 6.9"
-    expect(resolutions).toContainEqual([1284, 2778]); // 6.5"
-    expect(resolutions).toContainEqual([1242, 2208]); // 5.5"
-    expect(resolutions).toContainEqual([2048, 2732]); // 12.9" iPad
-  });
-
-  it("all sizes are portrait orientation", () => {
-    for (const size of SCREENSHOT_SIZES) {
-      expect(size.height).toBeGreaterThan(size.width);
-    }
+  it("contains the current iPhone and iPad master sizes", () => {
+    expect(SCREENSHOT_SIZES).toEqual([
+      {
+        displayName: '6.9" iPhone',
+        height: 2868,
+        name: "iphone_6_9",
+        platform: "iPhone",
+        width: 1320,
+      },
+      {
+        displayName: '13" iPad',
+        height: 2752,
+        name: "ipad_13",
+        platform: "iPad",
+        width: 2064,
+      },
+    ]);
   });
 });
 
 describe("validateFile", () => {
-  it("accepts PNG files", () => {
-    const file = createMockFile("test.png", "image/png");
-    expect(() => validateFile(file)).not.toThrow();
+  it.each(["image/png", "image/jpeg", "image/webp"])(
+    "accepts %s input",
+    (type) => {
+      expect(() => validateFile(createMockFile("image", type))).not.toThrow();
+    }
+  );
+
+  it("rejects unsupported input", () => {
+    expect(() =>
+      validateFile(createMockFile("test.svg", "image/svg+xml"))
+    ).toThrow("Please upload a PNG, JPEG, or WebP image");
   });
 
-  it("accepts JPEG files", () => {
-    const file = createMockFile("test.jpg", "image/jpeg");
-    expect(() => validateFile(file)).not.toThrow();
+  it("rejects files over the byte limit", () => {
+    expect(() =>
+      validateFile(createMockFile("large.png", "image/png", MAX_FILE_SIZE + 1))
+    ).toThrow("Image too large");
   });
 
-  it("accepts WebP files", () => {
-    const file = createMockFile("test.webp", "image/webp");
-    expect(() => validateFile(file)).not.toThrow();
-  });
-
-  it("rejects GIF files", () => {
-    const file = createMockFile("test.gif", "image/gif");
-    expect(() => validateFile(file)).toThrow(ImageProcessorError);
-    expect(() => validateFile(file)).toThrow(
-      "Please upload a PNG, JPEG, or WebP image"
-    );
-  });
-
-  it("rejects SVG files", () => {
-    const file = createMockFile("test.svg", "image/svg+xml");
-    expect(() => validateFile(file)).toThrow(ImageProcessorError);
-  });
-
-  it("rejects non-image files", () => {
-    const file = createMockFile("test.pdf", "application/pdf");
-    expect(() => validateFile(file)).toThrow(ImageProcessorError);
-  });
-
-  it("rejects files exceeding 20MB", () => {
-    const file = createMockFile("large.png", "image/png", 20 * 1024 * 1024 + 1);
-    expect(() => validateFile(file)).toThrow(ImageProcessorError);
-    expect(() => validateFile(file)).toThrow("Image too large");
-  });
-
-  it("accepts files exactly at 20MB", () => {
-    const file = createMockFile("exact.png", "image/png", 20 * 1024 * 1024);
-    expect(() => validateFile(file)).not.toThrow();
-  });
-
-  it("accepts small files", () => {
-    const file = createMockFile("tiny.png", "image/png", 100);
-    expect(() => validateFile(file)).not.toThrow();
-  });
-});
-
-describe("ImageProcessorError", () => {
-  it("has correct name", () => {
-    const error = new ImageProcessorError("test message");
-    expect(error.name).toBe("ImageProcessorError");
-  });
-
-  it("has correct message", () => {
-    const error = new ImageProcessorError("test message");
-    expect(error.message).toBe("test message");
-  });
-
-  it("is an instance of Error", () => {
-    const error = new ImageProcessorError("test");
-    expect(error).toBeInstanceOf(Error);
+  it("rejects empty files", () => {
+    expect(() =>
+      validateFile(createMockFile("empty.png", "image/png", 0))
+    ).toThrow("Image is empty");
   });
 });
 
 describe("processImage", () => {
-  it("rejects invalid file type before processing", async () => {
-    const file = createMockFile("test.gif", "image/gif");
-    await expect(
-      processImage(file, { fitMode: "contain", backgroundColor: "#ffffff" })
-    ).rejects.toThrow("Please upload a PNG, JPEG, or WebP image");
-  });
+  it("exports one submission-safe JPEG per master size", async () => {
+    mockImageLoad();
+    const results = await processImage(
+      createMockFile("screen.png", "image/png"),
+      {
+        backgroundColor: "#ffffff",
+        fitMode: "contain",
+      }
+    );
 
-  it("rejects oversized file before processing", async () => {
-    const file = createMockFile("big.png", "image/png", 21 * 1024 * 1024);
-    await expect(
-      processImage(file, { fitMode: "contain", backgroundColor: "#ffffff" })
-    ).rejects.toThrow("Image too large");
-  });
-
-  it("returns 4 processed images (one per screenshot size)", async () => {
-    mockImageLoad(1000, 1500);
-    const file = createMockFile("test.png", "image/png");
-    const results = await processImage(file, {
-      fitMode: "contain",
-      backgroundColor: "#ffffff",
-    });
-
-    expect(results).toHaveLength(4);
-  });
-
-  it("each result has correct filename format", async () => {
-    mockImageLoad(1000, 1500);
-    const file = createMockFile("test.png", "image/png");
-    const results = await processImage(file, {
-      fitMode: "contain",
-      backgroundColor: "#ffffff",
-    });
-
+    expect(results).toHaveLength(2);
     for (const result of results) {
-      expect(result.filename).toMatch(FILENAME_PATTERN);
+      expect(result.blob.type).toBe("image/jpeg");
+      expect(result.filename).toMatch(OUTPUT_FILENAME_PATTERN);
+      expect(result).not.toHaveProperty("dataUrl");
     }
+    expect(canvases[0].toBlob).toHaveBeenCalledWith(
+      expect.any(Function),
+      "image/jpeg",
+      0.96
+    );
   });
 
-  it("each result contains required fields", async () => {
-    mockImageLoad(1000, 1500);
-    const file = createMockFile("test.png", "image/png");
-    const results = await processImage(file, {
-      fitMode: "contain",
-      backgroundColor: "#ffffff",
-    });
-
-    for (const result of results) {
-      expect(result).toHaveProperty("blob");
-      expect(result).toHaveProperty("dataUrl");
-      expect(result).toHaveProperty("filename");
-      expect(result).toHaveProperty("size");
-      expect(result.dataUrl).toMatch(DATA_URL_PATTERN);
-    }
-  });
-
-  it("calls progress callback with correct percentages", async () => {
-    mockImageLoad(1000, 1500);
-    const file = createMockFile("test.png", "image/png");
+  it("reports progress for each master size", async () => {
+    mockImageLoad();
     const onProgress = vi.fn();
 
     await processImage(
-      file,
-      { fitMode: "contain", backgroundColor: "#ffffff" },
+      createMockFile("screen.png", "image/png"),
+      { backgroundColor: "#ffffff", fitMode: "contain" },
       onProgress
     );
 
-    expect(onProgress).toHaveBeenCalledTimes(4);
-    expect(onProgress).toHaveBeenNthCalledWith(1, 25);
-    expect(onProgress).toHaveBeenNthCalledWith(2, 50);
-    expect(onProgress).toHaveBeenNthCalledWith(3, 75);
-    expect(onProgress).toHaveBeenNthCalledWith(4, 100);
+    expect(onProgress.mock.calls).toEqual([[50], [100]]);
   });
 
-  it("works without progress callback", async () => {
-    mockImageLoad(1000, 1500);
-    const file = createMockFile("test.png", "image/png");
-    const results = await processImage(file, {
-      fitMode: "contain",
+  it("keeps portrait output for portrait input", async () => {
+    mockImageLoad(1000, 2000);
+    await processImage(createMockFile("portrait.png", "image/png"), {
       backgroundColor: "#ffffff",
+      fitMode: "contain",
     });
 
-    expect(results).toHaveLength(4);
+    expect(canvases.map(({ width, height }) => [width, height])).toEqual([
+      [1320, 2868],
+      [2064, 2752],
+    ]);
   });
 
-  it("uses contain fit mode - fills background and draws image", async () => {
-    mockImageLoad(800, 600); // landscape image
-    const file = createMockFile("test.png", "image/png");
+  it("rotates target dimensions for landscape input", async () => {
+    mockImageLoad(2000, 1000);
+    const results = await processImage(
+      createMockFile("landscape.png", "image/png"),
+      {
+        backgroundColor: "#ffffff",
+        fitMode: "cover",
+      }
+    );
 
-    await processImage(file, {
-      fitMode: "contain",
-      backgroundColor: "#ff0000",
-    });
-
-    // Background should be filled with the specified color
-    expect(mockCtx.fillRect).toHaveBeenCalled();
-    expect(mockCtx.fillStyle).toBe("#ff0000");
-    expect(mockCtx.drawImage).toHaveBeenCalled();
+    expect(canvases.map(({ width, height }) => [width, height])).toEqual([
+      [2868, 1320],
+      [2752, 2064],
+    ]);
+    expect(results.map(({ size }) => [size.width, size.height])).toEqual([
+      [2868, 1320],
+      [2752, 2064],
+    ]);
   });
 
-  it("uses transparent background - calls clearRect instead of fillRect", async () => {
-    mockImageLoad(800, 600);
-    const file = createMockFile("test.png", "image/png");
-
-    await processImage(file, {
-      fitMode: "contain",
+  it("always paints an opaque background for JPEG output", async () => {
+    mockImageLoad();
+    await processImage(createMockFile("screen.png", "image/png"), {
       backgroundColor: "transparent",
-    });
-
-    expect(mockCtx.clearRect).toHaveBeenCalled();
-  });
-
-  it("uses cover fit mode - draws image", async () => {
-    mockImageLoad(800, 600);
-    const file = createMockFile("test.png", "image/png");
-
-    await processImage(file, {
-      fitMode: "cover",
-      backgroundColor: "#ffffff",
-    });
-
-    expect(mockCtx.drawImage).toHaveBeenCalled();
-  });
-
-  it("applies sharpening filter during processing", async () => {
-    mockImageLoad(800, 600);
-    const file = createMockFile("test.png", "image/png");
-
-    await processImage(file, {
       fitMode: "contain",
-      backgroundColor: "#ffffff",
     });
 
-    // Sharpening reads pixel data and writes it back
-    expect(mockCtx.getImageData).toHaveBeenCalled();
-    expect(mockCtx.putImageData).toHaveBeenCalled();
+    expect(mockCtx.fillStyle).toBe("#ffffff");
+    expect(mockCtx.fillRect).toHaveBeenCalled();
   });
 
-  it("result sizes match SCREENSHOT_SIZES", async () => {
-    mockImageLoad(1000, 1500);
-    const file = createMockFile("test.png", "image/png");
-    const results = await processImage(file, {
-      fitMode: "contain",
-      backgroundColor: "#ffffff",
+  it("rejects decoded images that exceed the pixel limit", async () => {
+    mockImageLoad(MAX_IMAGE_PIXELS + 1, 1);
+
+    await expect(
+      processImage(createMockFile("huge.png", "image/png"), {
+        backgroundColor: "#ffffff",
+        fitMode: "contain",
+      })
+    ).rejects.toThrow("Image dimensions are too large");
+  });
+
+  it("reports a corrupt image cleanly", async () => {
+    mockImageError();
+
+    await expect(
+      processImage(createMockFile("broken.png", "image/png"), {
+        backgroundColor: "#ffffff",
+        fitMode: "contain",
+      })
+    ).rejects.toThrow("Failed to load image");
+  });
+
+  it("can be cancelled before expensive work begins", async () => {
+    mockImageLoad();
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      processImage(
+        createMockFile("screen.png", "image/png"),
+        { backgroundColor: "#ffffff", fitMode: "contain" },
+        undefined,
+        controller.signal
+      )
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(canvases).toHaveLength(0);
+  });
+
+  it("surfaces browser encoding failures", async () => {
+    mockImageLoad();
+    vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
+      if (tag === "canvas") {
+        return {
+          getContext: vi.fn(() => mockCtx),
+          height: 0,
+          toBlob: vi.fn((callback: BlobCallback) => callback(null)),
+          width: 0,
+        } as unknown as HTMLCanvasElement;
+      }
+      return originalCreateElement(tag);
     });
 
-    const resultSizeNames = results.map((r) => r.size.name);
-    const expectedNames = SCREENSHOT_SIZES.map((s) => s.name);
-    expect(resultSizeNames).toEqual(expectedNames);
+    await expect(
+      processImage(createMockFile("screen.png", "image/png"), {
+        backgroundColor: "#ffffff",
+        fitMode: "contain",
+      })
+    ).rejects.toThrow('Failed to process image for 6.9" iPhone');
+  });
+});
+
+describe("downloadAllAsZip", () => {
+  it("rejects an empty download", async () => {
+    await expect(downloadAllAsZip([])).rejects.toBeInstanceOf(
+      ImageProcessorError
+    );
   });
 });

@@ -6,24 +6,36 @@ import type {
   ScreenshotSize,
 } from "../types";
 
+/**
+ * Current master screenshot sizes accepted by App Store Connect. Apple scales
+ * these down for smaller display classes, so one iPhone and one iPad output is
+ * enough for apps that support both platforms.
+ */
 export const SCREENSHOT_SIZES: ScreenshotSize[] = [
-  { name: "6.9inch", width: 1320, height: 2868, displayName: '6.9" Display' },
-  { name: "6.5inch", width: 1284, height: 2778, displayName: '6.5" Display' },
-  { name: "5.5inch", width: 1242, height: 2208, displayName: '5.5" Display' },
   {
-    name: "12.9inch_ipad",
-    width: 2048,
-    height: 2732,
-    displayName: '12.9" iPad',
+    displayName: '6.9" iPhone',
+    height: 2868,
+    name: "iphone_6_9",
+    platform: "iPhone",
+    width: 1320,
+  },
+  {
+    displayName: '13" iPad',
+    height: 2752,
+    name: "ipad_13",
+    platform: "iPad",
+    width: 2064,
   },
 ];
 
-const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+export const MAX_FILE_SIZE = 20 * 1024 * 1024;
+export const MAX_IMAGE_PIXELS = 40_000_000;
 const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/webp"];
+const JPEG_QUALITY = 0.96;
 
 export class ImageProcessorError extends Error {
-  constructor(message: string) {
-    super(message);
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = "ImageProcessorError";
   }
 }
@@ -32,6 +44,9 @@ export function validateFile(file: File): void {
   if (!ALLOWED_TYPES.includes(file.type)) {
     throw new ImageProcessorError("Please upload a PNG, JPEG, or WebP image");
   }
+  if (file.size === 0) {
+    throw new ImageProcessorError("Image is empty. Please choose another file");
+  }
   if (file.size > MAX_FILE_SIZE) {
     throw new ImageProcessorError(
       "Image too large. Please use an image under 20MB"
@@ -39,196 +54,166 @@ export function validateFile(file: File): void {
   }
 }
 
-function loadImage(file: File): Promise<HTMLImageElement> {
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new DOMException("Processing cancelled", "AbortError");
+  }
+}
+
+function loadImage(
+  file: File,
+  signal?: AbortSignal
+): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
-    const img = new Image();
+    throwIfAborted(signal);
+
+    const image = new Image();
     const url = URL.createObjectURL(file);
 
-    img.onload = () => {
+    const cleanUp = () => {
       URL.revokeObjectURL(url);
-      resolve(img);
+      signal?.removeEventListener("abort", handleAbort);
+    };
+    const handleAbort = () => {
+      cleanUp();
+      image.src = "";
+      reject(new DOMException("Processing cancelled", "AbortError"));
     };
 
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
+    image.onload = () => {
+      cleanUp();
+      const width = image.naturalWidth || image.width;
+      const height = image.naturalHeight || image.height;
+
+      if (width <= 0 || height <= 0) {
+        reject(new ImageProcessorError("Failed to read image dimensions"));
+        return;
+      }
+      if (width * height > MAX_IMAGE_PIXELS) {
+        reject(
+          new ImageProcessorError(
+            "Image dimensions are too large. Please use an image under 40 megapixels"
+          )
+        );
+        return;
+      }
+      resolve(image);
+    };
+    image.onerror = () => {
+      cleanUp();
       reject(new ImageProcessorError("Failed to load image"));
     };
-
-    img.src = url;
+    signal?.addEventListener("abort", handleAbort, { once: true });
+    image.src = url;
   });
 }
 
-/**
- * Apply sharpening convolution filter to canvas
- * Uses unsharp mask kernel: [0,-1,0], [-1,5,-1], [0,-1,0]
- */
-function applySharpen(
-  ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  intensity = 0.3
-): void {
-  const imageData = ctx.getImageData(0, 0, width, height);
-  const data = imageData.data;
-  const copy = new Uint8ClampedArray(data);
-
-  // Sharpening kernel (unsharp mask)
-  const kernel = [0, -1, 0, -1, 5, -1, 0, -1, 0];
-  const kernelSize = 3;
-  const half = Math.floor(kernelSize / 2);
-
-  for (let y = half; y < height - half; y++) {
-    for (let x = half; x < width - half; x++) {
-      let r = 0,
-        g = 0,
-        b = 0;
-
-      // Apply convolution
-      for (let ky = 0; ky < kernelSize; ky++) {
-        for (let kx = 0; kx < kernelSize; kx++) {
-          const px = x + kx - half;
-          const py = y + ky - half;
-          const idx = (py * width + px) * 4;
-          const weight = kernel[ky * kernelSize + kx];
-
-          r += copy[idx] * weight;
-          g += copy[idx + 1] * weight;
-          b += copy[idx + 2] * weight;
-        }
-      }
-
-      const idx = (y * width + x) * 4;
-
-      // Blend original with sharpened based on intensity
-      data[idx] = Math.min(
-        255,
-        Math.max(0, copy[idx] + (r - copy[idx]) * intensity)
-      );
-      data[idx + 1] = Math.min(
-        255,
-        Math.max(0, copy[idx + 1] + (g - copy[idx + 1]) * intensity)
-      );
-      data[idx + 2] = Math.min(
-        255,
-        Math.max(0, copy[idx + 2] + (b - copy[idx + 2]) * intensity)
-      );
-      // Alpha channel unchanged
-    }
+function orientSize(
+  size: ScreenshotSize,
+  isLandscape: boolean
+): ScreenshotSize {
+  if (!isLandscape) {
+    return size;
   }
+  return { ...size, height: size.width, width: size.height };
+}
 
-  ctx.putImageData(imageData, 0, 0);
+function encodeJpeg(canvas: HTMLCanvasElement): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          resolve(blob);
+        } else {
+          reject(new ImageProcessorError("Browser failed to encode the image"));
+        }
+      },
+      "image/jpeg",
+      JPEG_QUALITY
+    );
+  });
 }
 
 function resizeImage(
-  img: HTMLImageElement,
+  image: HTMLImageElement,
   targetSize: ScreenshotSize,
   options: ProcessingOptions
-): { blob: Blob; dataUrl: string } {
+): Promise<Blob> {
   const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-
-  if (!ctx) {
-    throw new ImageProcessorError("Failed to create canvas context");
-  }
-
   canvas.width = targetSize.width;
   canvas.height = targetSize.height;
 
-  // Enable high-quality image scaling
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-
-  // Fill background (transparent if 'transparent', otherwise use the color)
-  if (options.backgroundColor === "transparent") {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-  } else {
-    ctx.fillStyle = options.backgroundColor;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new ImageProcessorError("Failed to create canvas context");
   }
 
-  const imgAspect = img.width / img.height;
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+
+  // JPEG has no alpha channel, which App Store Connect requires. Preserve
+  // backwards compatibility if a caller still passes the old transparent value.
+  context.fillStyle =
+    options.backgroundColor === "transparent"
+      ? "#ffffff"
+      : options.backgroundColor;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+
+  const imageWidth = image.naturalWidth || image.width;
+  const imageHeight = image.naturalHeight || image.height;
+  const imageAspect = imageWidth / imageHeight;
   const canvasAspect = canvas.width / canvas.height;
+  const shouldFitWidth =
+    options.fitMode === "contain"
+      ? imageAspect > canvasAspect
+      : imageAspect < canvasAspect;
+  const drawWidth = shouldFitWidth ? canvas.width : canvas.height * imageAspect;
+  const drawHeight = shouldFitWidth
+    ? canvas.width / imageAspect
+    : canvas.height;
+  const drawX = (canvas.width - drawWidth) / 2;
+  const drawY = (canvas.height - drawHeight) / 2;
 
-  let drawWidth: number;
-  let drawHeight: number;
-  let drawX: number;
-  let drawY: number;
-
-  if (options.fitMode === "contain") {
-    // Fit entire image within canvas, maintaining aspect ratio
-    if (imgAspect > canvasAspect) {
-      drawWidth = canvas.width;
-      drawHeight = canvas.width / imgAspect;
-    } else {
-      drawHeight = canvas.height;
-      drawWidth = canvas.height * imgAspect;
-    }
-    drawX = (canvas.width - drawWidth) / 2;
-    drawY = (canvas.height - drawHeight) / 2;
-  } else {
-    // Cover: fill canvas, cropping if necessary
-    if (imgAspect > canvasAspect) {
-      drawHeight = canvas.height;
-      drawWidth = canvas.height * imgAspect;
-    } else {
-      drawWidth = canvas.width;
-      drawHeight = canvas.width / imgAspect;
-    }
-    drawX = (canvas.width - drawWidth) / 2;
-    drawY = (canvas.height - drawHeight) / 2;
-  }
-
-  ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
-
-  // Apply subtle sharpening to improve upscaled image quality
-  applySharpen(ctx, canvas.width, canvas.height, 0.3);
-
-  const dataUrl = canvas.toDataURL("image/png");
-
-  // Convert dataUrl to Blob
-  const byteString = atob(dataUrl.split(",")[1]);
-  const mimeString = dataUrl.split(",")[0].split(":")[1].split(";")[0];
-  const ab = new ArrayBuffer(byteString.length);
-  const ia = new Uint8Array(ab);
-
-  for (let i = 0; i < byteString.length; i++) {
-    ia[i] = byteString.charCodeAt(i);
-  }
-
-  const blob = new Blob([ab], { type: mimeString });
-
-  return { blob, dataUrl };
+  context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+  return encodeJpeg(canvas);
 }
 
 export async function processImage(
   file: File,
   options: ProcessingOptions,
-  onProgress?: ProgressCallback
+  onProgress?: ProgressCallback,
+  signal?: AbortSignal
 ): Promise<ProcessedImage[]> {
   validateFile(file);
+  throwIfAborted(signal);
 
-  const img = await loadImage(file);
+  const image = await loadImage(file, signal);
+  const imageWidth = image.naturalWidth || image.width;
+  const imageHeight = image.naturalHeight || image.height;
+  const isLandscape = imageWidth > imageHeight;
   const results: ProcessedImage[] = [];
 
-  for (let i = 0; i < SCREENSHOT_SIZES.length; i++) {
-    const size = SCREENSHOT_SIZES[i];
+  for (const [index, baseSize] of SCREENSHOT_SIZES.entries()) {
+    throwIfAborted(signal);
+    const size = orientSize(baseSize, isLandscape);
 
     try {
-      const { blob, dataUrl } = resizeImage(img, size, options);
-
+      // biome-ignore lint/performance/noAwaitInLoops: sequential encoding bounds peak canvas memory
+      const blob = await resizeImage(image, size, options);
+      throwIfAborted(signal);
       results.push({
         blob,
-        dataUrl,
-        filename: `screenshot_${size.name}_${size.width}x${size.height}.png`,
+        filename: `sized_${size.name}_${size.width}x${size.height}.jpg`,
         size,
       });
-
-      if (onProgress) {
-        onProgress(Math.round(((i + 1) / SCREENSHOT_SIZES.length) * 100));
+      onProgress?.(Math.round(((index + 1) / SCREENSHOT_SIZES.length) * 100));
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        throw error;
       }
-    } catch {
       throw new ImageProcessorError(
-        `Failed to process image for ${size.displayName}`
+        `Failed to process image for ${size.displayName}`,
+        { cause: error }
       );
     }
   }
@@ -236,41 +221,42 @@ export async function processImage(
   return results;
 }
 
-export function downloadSingleImage(image: ProcessedImage): void {
+function triggerDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
-  link.href = image.dataUrl;
-  link.download = image.filename;
+  link.href = url;
+  link.download = filename;
   document.body.appendChild(link);
   link.click();
-  document.body.removeChild(link);
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+export function downloadSingleImage(image: ProcessedImage): void {
+  triggerDownload(image.blob, image.filename);
 }
 
 export async function downloadAllAsZip(
   images: ProcessedImage[]
 ): Promise<void> {
-  const zip = new JSZip();
-
-  for (const image of images) {
-    zip.file(image.filename, image.blob);
+  if (images.length === 0) {
+    throw new ImageProcessorError("There are no screenshots to download");
   }
 
-  let url: string | undefined;
   try {
-    const content = await zip.generateAsync({ type: "blob" });
-    url = URL.createObjectURL(content);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "ios_screenshots.zip";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  } catch {
-    throw new ImageProcessorError(
-      "Failed to create download. Please try again"
-    );
-  } finally {
-    if (url) {
-      URL.revokeObjectURL(url);
+    const zip = new JSZip();
+    for (const image of images) {
+      zip.file(image.filename, image.blob);
     }
+    const content = await zip.generateAsync({ type: "blob" });
+    triggerDownload(content, "sized_app_store_screenshots.zip");
+  } catch (error) {
+    if (error instanceof ImageProcessorError) {
+      throw error;
+    }
+    throw new ImageProcessorError(
+      "Failed to create download. Please try again",
+      { cause: error }
+    );
   }
 }

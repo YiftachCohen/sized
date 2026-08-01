@@ -8,15 +8,16 @@ Thanks for your interest in contributing to Sized!
 2. Install dependencies: `pnpm install`
 3. Start the dev server: `pnpm dev`
 
-Requires Node.js 18+ and [pnpm](https://pnpm.io/).
+Requires Node.js 22.12+ and pnpm 11 (declared in `package.json`).
 
 ## Making Changes
 
 1. Create a branch from `main`
 2. Make your changes
 3. Run `pnpm lint` to check formatting and linting (uses [Biome](https://biomejs.dev/))
-4. Run `pnpm build` to verify the build passes
-5. Open a pull request against `main`
+4. Run `pnpm test` to execute the regression suite
+5. Run `pnpm build` to verify the production build
+6. Open a pull request against `main`
 
 ## Code Style
 

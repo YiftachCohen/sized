@@ -1,7 +1,7 @@
 {
   "name": "sized",
-  "version": "1.0.0",
-  "description": "Generate iOS App Store screenshots in all required sizes — entirely in the browser",
+  "version": "1.1.0",
+  "description": "Create current iPhone and iPad App Store screenshots entirely in the browser",
   "type": "module",
   "license": "MIT",
   "author": "Yiftach Cohen",
@@ -9,13 +9,14 @@
     "type": "git",
     "url": "https://github.com/YiftachCohen/sized.git"
   },
-  "homepage": "https://github.com/YiftachCohen/sized",
+  "homepage": "https://ycstudios.dev/sized",
   "bugs": {
     "url": "https://github.com/YiftachCohen/sized/issues"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22.12"
   },
+  "packageManager": "pnpm@11.9.0",
   "keywords": [
     "ios",
     "screenshot",
@@ -35,23 +36,23 @@
   },
   "dependencies": {
     "jszip": "^3.10.1",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-dropzone": "^14.2.3"
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-dropzone": "^19.2.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.3.11",
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
-    "@vitejs/plugin-react": "^4.2.1",
-    "@vitest/coverage-v8": "^4.0.18",
-    "autoprefixer": "^10.4.17",
-    "jsdom": "^28.0.0",
-    "postcss": "^8.4.35",
+    "@biomejs/biome": "2.5.6",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.0.5",
+    "@vitest/coverage-v8": "^4.1.10",
+    "autoprefixer": "^10.5.4",
+    "jsdom": "^30.0.1",
+    "postcss": "^8.5.25",
     "tailwindcss": "^3.4.1",
-    "typescript": "^5.3.3",
-    "ultracite": "7.0.12",
-    "vite": "^5.1.0",
-    "vitest": "^4.0.18"
+    "typescript": "^6.0.0",
+    "ultracite": "7.9.4",
+    "vite": "^8.2.0",
+    "vitest": "^4.1.10"
   }
 }
