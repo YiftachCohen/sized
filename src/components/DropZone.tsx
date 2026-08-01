@@ -1,12 +1,12 @@
 import { useCallback, useEffect } from "react";
 import { type FileRejection, useDropzone } from "react-dropzone";
 import {
+  ACCEPTED_IMAGE_TYPES,
+  ALLOWED_TYPES,
   ImageProcessorError,
   MAX_FILE_SIZE,
   validateFile,
 } from "../utils/ImageProcessor";
-
-const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/webp"];
 
 interface DropZoneProps {
   onError: (message: string) => void;
@@ -85,11 +85,7 @@ export function DropZone({ onFileAccepted, onError }: DropZoneProps) {
   }, [acceptFile, onError]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: {
-      "image/jpeg": [".jpg", ".jpeg"],
-      "image/png": [".png"],
-      "image/webp": [".webp"],
-    },
+    accept: ACCEPTED_IMAGE_TYPES,
     maxFiles: 1,
     maxSize: MAX_FILE_SIZE,
     multiple: false,

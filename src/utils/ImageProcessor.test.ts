@@ -46,7 +46,6 @@ beforeEach(() => {
   });
 
   vi.stubGlobal("URL", {
-    ...URL,
     createObjectURL: vi.fn(() => "blob:mock-url"),
     revokeObjectURL: vi.fn(),
   });

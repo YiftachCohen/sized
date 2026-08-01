@@ -30,7 +30,12 @@ export const SCREENSHOT_SIZES: ScreenshotSize[] = [
 
 export const MAX_FILE_SIZE = 20 * 1024 * 1024;
 export const MAX_IMAGE_PIXELS = 40_000_000;
-const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/webp"];
+export const ACCEPTED_IMAGE_TYPES = {
+  "image/jpeg": [".jpg", ".jpeg"],
+  "image/png": [".png"],
+  "image/webp": [".webp"],
+};
+export const ALLOWED_TYPES = Object.keys(ACCEPTED_IMAGE_TYPES);
 const JPEG_QUALITY = 0.96;
 
 export class ImageProcessorError extends Error {
@@ -229,7 +234,7 @@ function triggerDownload(blob: Blob, filename: string): void {
   document.body.appendChild(link);
   link.click();
   link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export function downloadSingleImage(image: ProcessedImage): void {
